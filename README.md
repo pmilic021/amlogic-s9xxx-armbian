@@ -380,6 +380,69 @@ the trigger fired; no trace indicates a non-matching trigger), and **Settings �
 
 ---
 
+## Part 9 — Remote SSH access via Tailscale
+
+[Tailscale](https://tailscale.com) places the box on a private mesh network (a *tailnet*),
+making SSH reachable from any other device on the same tailnet without exposing port 22 to the
+public internet. If a tailnet already exists, the box simply joins it.
+
+### Install and connect
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+```
+
+This adds Tailscale's apt repository and installs the package. It coexists with Docker and Home
+Assistant — it operates its own `tailscale0` interface and does not alter the existing
+networking. The `tailscaled` service is enabled at install time.
+
+Authenticate:
+
+```bash
+sudo tailscale up
+```
+
+A URL is printed; opening it in a browser and logging in adds the box to the tailnet. Retrieve
+its address:
+
+```bash
+tailscale ip -4     # the 100.x.y.z tailnet address
+tailscale status    # confirms the connection and shows the hostname
+```
+
+### SSH access
+
+The connecting device (laptop, phone) must also be on the tailnet — it is a private mesh, so
+both ends require Tailscale. With standard SSH-key authentication (the public key present in
+`~/.ssh/authorized_keys` on the box for the login user; ophub images enable root SSH by
+default):
+
+```bash
+ssh root@100.x.y.z
+# or, with MagicDNS enabled, by hostname:
+ssh root@<box-hostname>
+```
+
+Access is thereby confined to the private tailnet and never exposed to the public internet —
+the reason this is preferable to forwarding port 22.
+
+### Autostart
+
+No additional configuration is required. The `tailscaled` service is enabled at install, and
+the authentication state is persisted to `/var/lib/tailscale/`, so the box rejoins the tailnet
+automatically after a reboot without further login. This can be confirmed with:
+
+```bash
+systemctl is-enabled tailscaled     # expected: enabled
+```
+
+> **⚠️ Device-key expiry is the real long-term concern, not autostart.** By default a Tailscale
+> device key expires (~180 days), after which the box silently leaves the tailnet and requires
+> a re-authentication that cannot be performed remotely on a headless machine. In the Tailscale
+> admin console → **Machines → this device → Disable key expiry** prevents this.
+
+---
+
 ## Troubleshooting summary (issues encountered during this installation)
 
 | Symptom | Cause | Resolution |
@@ -409,6 +472,7 @@ the trigger fired; no trace indicates a non-matching trigger), and **Settings �
 7. Zigbee2MQTT: port `/dev/ttyUSB0`, adapter **`zstack`**, MQTT blank (auto). MQTT integration
    → `core-mosquitto:1883` with the `mqtt` user.
 8. Pair devices; automate buttons with an **MQTT trigger** using `value_json.action`.
+9. (Optional) Install Tailscale (curl install script → tailscale up) for private remote SSH; disable device-key expiry in the admin console.
 </details>
 
 <details>
